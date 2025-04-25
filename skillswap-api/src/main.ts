@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import * as cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { writeFileSync } from 'fs';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
@@ -36,6 +37,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
+  if (process.env.NODE_ENV !== 'production') {
+    writeFileSync('/swagger/swagger.json', JSON.stringify(document, null, 2));
+  }
+
   // Determine allowed origins
   let allowedOrigins: string[] = [];
   if (process.env.NODE_ENV === 'production') {
@@ -47,6 +52,7 @@ async function bootstrap() {
     // In development, use localhost
     allowedOrigins = [
       'http://localhost:3000',
+      'http://localhost:4000',
       'http://frontend:3000',
       'http://127.0.0.1:3000',
     ];

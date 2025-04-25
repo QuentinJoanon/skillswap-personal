@@ -5,9 +5,9 @@ import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { useAuthStore } from "@/lib/stores/authStore";
+import { useAuthStore, UserWithRelations } from "@/lib/stores/authStore";
 import { apiService } from "@/lib/services/apiService";
-import type { User } from "@/lib/stores/authStore"; // Importation du type User
+import type { User } from "@/@types/api/models/User";
 
 interface LoginProps {
   onSwitchToRegister?: () => void;
@@ -26,30 +26,25 @@ const Login = ({ onSwitchToRegister, handleLogin }: LoginProps) => {
     setError("");
 
     try {
-      // Appel API avec credentials: include pour envoyer/recevoir les cookies
+      // Call API with credentials:include to send/receive cookies
       const loginResponse = await apiService.post("/auth/login", {
         email,
         password,
       });
 
-      // On s'assure que la connexion a réussi avant de faire la requête suivante
+      // Ensure login was successful before making the next request
       if (loginResponse) {
-        try {
-          // Récupération des informations de l'utilisateur connecté
+        try {          // Fetch connected user information
           const userResponse = await apiService.get<User>("/users/me");
-          console.log("userResponse", userResponse);
 
-          // Mise à jour du store avec les données de l'utilisateur
-          login({ user: userResponse });
+          // Update store with user data - userResponse already contains skills and availabilities
+          login({ user: userResponse as unknown as UserWithRelations });
 
           if (handleLogin) {
             handleLogin();
           }
         } catch (userError) {
-          console.error(
-            "Erreur lors de la récupération des infos utilisateur:",
-            userError
-          );
+          console.error("Error retrieving user information:", userError);
 
           if (handleLogin) {
             handleLogin();
@@ -57,8 +52,8 @@ const Login = ({ onSwitchToRegister, handleLogin }: LoginProps) => {
         }
       }
     } catch (err) {
-      console.error("Erreur de connexion:", err);
-      setError(err instanceof Error ? err.message : "Erreur de connexion");
+      console.error("Login error:", err);
+      setError(err instanceof Error ? err.message : "Login error");
     }
   };
 

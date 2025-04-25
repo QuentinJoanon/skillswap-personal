@@ -2,17 +2,17 @@ name: Deploy SkillSwap API to Koyeb 🚀
 
 # This workflow is triggered when the build workflow completes successfully
 on:
-  workflow_run:
-    workflows: ["Build SkillSwap API Docker Image 🐳"]
-    types:
-      - completed
+  
+  # Direct trigger from build workflow
+  repository_dispatch:
+    types: [ deploy-api-trigger ]
+  
+  # Manual trigger for testing
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Only run this job if the build workflow succeeded or if manually triggered
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
-
     steps:
       # Combined step to install Koyeb CLI and deploy in a single shell context
       # This ensures the PATH variable is properly set when running the koyeb command
@@ -26,6 +26,7 @@ jobs:
         # Update the existing service on Koyeb with the latest Docker image
         # This assumes the service "skillswap-api" already exists on Koyeb
         run: |
+        
           curl -fsSL https://raw.githubusercontent.com/koyeb/koyeb-cli/master/install.sh | sh
     
           export PATH=$HOME/.koyeb/bin:$PATH

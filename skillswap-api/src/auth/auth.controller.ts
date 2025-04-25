@@ -7,12 +7,12 @@ import {
   Req,
   UnauthorizedException,
   Res,
-  Get,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignInDto } from './dto/sign-in.dto';
 import { Request, Response } from 'express';
 import { CreateUserDto } from '../user/dto/create-user.dto';
+import { RequestCookies } from './types/request-cookies';
 import {
   ApiBody,
   ApiCookieAuth,
@@ -30,11 +30,14 @@ export class AuthController {
   @ApiOperation({ summary: 'User login' })
   @ApiBody({ type: SignInDto })
   @ApiResponse({
-    status: 200,
+    status: HttpStatus.OK,
     description: 'Login successful',
     type: AuthResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid credentials',
+  })
   @HttpCode(HttpStatus.OK)
   @Post('login')
   signIn(
@@ -51,11 +54,11 @@ export class AuthController {
   @ApiOperation({ summary: 'User registration' })
   @ApiBody({ type: CreateUserDto })
   @ApiResponse({
-    status: 201,
+    status: HttpStatus.CREATED,
     description: 'Registration successful',
     type: AuthResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Invalid data' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid data' })
   @HttpCode(HttpStatus.CREATED)
   @Post('register')
   signUp(
@@ -68,7 +71,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Token refresh' })
   @ApiCookieAuth('refresh_token')
   @ApiResponse({
-    status: 200,
+    status: HttpStatus.OK,
     description: 'Token refreshed successfully',
     schema: {
       properties: {
@@ -76,7 +79,10 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or expired refresh token',
+  })
   @HttpCode(HttpStatus.OK)
   @Post('refresh')
   refresh(
@@ -84,10 +90,11 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     // Récupérer le refresh token depuis les cookies
-    const refreshToken = request.cookies['refresh_token'];
+    const requestCookies = request.cookies as RequestCookies;
+    const refreshToken = requestCookies.refresh_token;
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token manquant');
+      throw new UnauthorizedException('Missing refresh token.');
     }
 
     return this.authService.refreshToken(refreshToken, response);
@@ -96,7 +103,7 @@ export class AuthController {
   @ApiOperation({ summary: 'User logout' })
   @ApiCookieAuth()
   @ApiResponse({
-    status: 200,
+    status: HttpStatus.OK,
     description: 'Logout successful',
     schema: {
       properties: {

@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +11,10 @@ import * as bcrypt from 'bcrypt';
 import { Request } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from '../auth/types/jwt-payload';
+import { RequestCookies } from '../auth/types/request-cookies';
+import { UserResponseDto } from './dto/user-response.dto';
+import { plainToInstance } from 'class-transformer';
+import { UserWithRelations } from './type/user-with-relations';
 
 @Injectable()
 export class UserService {
@@ -17,6 +25,11 @@ export class UserService {
   ) {}
 
   async create(createUserDto: CreateUserDto) {
+    const emailUser = await this.findOneByMail(createUserDto.email);
+    if (emailUser) {
+      throw new BadRequestException('Email is already used.');
+    }
+
     createUserDto.password = await bcrypt.hash(
       createUserDto.password,
       this.saltRounds,
@@ -26,34 +39,72 @@ export class UserService {
     });
   }
 
-  async findAll(randomNum: number = 0): Promise<User[]> {
-    const users = await this.prisma.user.findMany();
+  async findAll(randomNum: number = 0): Promise<UserResponseDto[]> {
+    const users = await this.prisma.user.findMany({
+      include: {
+        skills: {
+          select: {
+            skill: true,
+          },
+        },
+        availabilities: {
+          select: {
+            id: true,
+            day: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
+    });
+
     if (randomNum > 0) {
-      const randomUsers: User[] = [];
-      const usedIndexes: number[] = [];
+      const randomUsers: UserWithRelations[] = [];
       for (let i = 0; i < randomNum; i++) {
-        let isPicked = false;
-        while (!isPicked) {
-          const randomIndex = Math.round(Math.random() * (users.length - 1));
-          if (!usedIndexes.includes(randomIndex)) {
-            usedIndexes.push(randomIndex);
-            randomUsers.push(users[randomIndex]);
-            isPicked = true;
-          }
+        if (users.length <= 0) {
+          break;
         }
+        const randomIndex = Math.round(Math.random() * (users.length - 1));
+        randomUsers.push(...users.splice(randomIndex, 1));
       }
-      return randomUsers;
+      return plainToInstance(UserResponseDto, randomUsers);
     } else {
-      return users;
+      return plainToInstance(UserResponseDto, users);
     }
   }
 
-  findOne(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+  async findOne(id: string): Promise<UserResponseDto | null> {
+    const user = await this.prisma.user.findUnique({
       where: {
         id: id,
       },
+      include: {
+        skills: {
+          select: {
+            skill: {
+              select: {
+                id: true,
+                name: true,
+                diminutive: true,
+                categoryId: true,
+              },
+            },
+          },
+        },
+        availabilities: {
+          select: {
+            id: true,
+            day: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
     });
+
+    if (!user) return null;
+
+    return plainToInstance(UserResponseDto, user);
   }
 
   findOneByMail(email: string): Promise<User | null> {
@@ -64,11 +115,12 @@ export class UserService {
     });
   }
 
-  async findMe(request: Request) {
-    const token = request.cookies?.access_token;
+  async findMe(request: Request): Promise<UserResponseDto> {
+    const requestCookies = request.cookies as RequestCookies;
+    const token = requestCookies?.access_token;
 
     if (!token) {
-      throw new UnauthorizedException('Aucun token trouvé dans les cookies');
+      throw new UnauthorizedException('No token found in cookies.');
     }
 
     try {
@@ -77,18 +129,13 @@ export class UserService {
       });
       const user = await this.findOne(payload.id);
       if (user) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { password, ...data } = user;
-        return data;
+        return user;
       } else {
-        throw new UnauthorizedException('Utilisateur non trouvé');
+        throw new UnauthorizedException('User not found.');
       }
     } catch (error) {
-      console.error(
-        'Erreur de vérification du token dans findMe:',
-        error.message,
-      );
-      throw new UnauthorizedException('Token invalide ou expiré');
+      console.error("Couldn't verify token in method findMe:", error);
+      throw new UnauthorizedException('Invalid or expired token.');
     }
   }
 
